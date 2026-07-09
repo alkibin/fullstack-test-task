@@ -13,7 +13,7 @@ MAX_SAFE_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_MIMES = ["application/pdf", "application/octet-stream"]
 
 
-async def scan_file_for_threats(file_id: str) -> bool | None:
+async def scan_file_for_threats_(file_id: str) -> bool | None:
     async with async_session_maker() as session:
         file_item = await _get_file(session, file_id)
 
@@ -37,7 +37,7 @@ async def scan_file_for_threats(file_id: str) -> bool | None:
         return True
 
 
-async def extract_file_metadata(file_id: str) -> bool | None:
+async def extract_file_metadata_(file_id: str) -> bool | None:
     async with async_session_maker() as session:
         file_item = await _get_file(session, file_id)
 
@@ -70,7 +70,7 @@ async def extract_file_metadata(file_id: str) -> bool | None:
 
 
 
-async def send_file_alert(file_id: str) -> None:
+async def send_file_alert_(file_id: str) -> None:
     async with async_session_maker() as session:
         file_item = await _get_file(session, file_id)
 

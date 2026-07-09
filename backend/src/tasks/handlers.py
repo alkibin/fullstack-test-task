@@ -1,7 +1,7 @@
 import asyncio
 
 from src.celery_app import celery_app
-from src.tasks.processing import scan_file_for_threats, extract_file_metadata, send_file_alert
+from src.tasks.processing import scan_file_for_threats_, extract_file_metadata_, send_file_alert_
 
 _worker_loop: asyncio.AbstractEventLoop | None = None
 
@@ -14,23 +14,23 @@ def run_in_worker_loop(coroutine):
 
 
 @celery_app.task(bind=True, max_retries=3)
-def scan_file_for_threats(file_id: str) -> None:
+def scan_file_for_threats(self, file_id: str) -> None:
     try:
-        run_in_worker_loop(scan_file_for_threats(file_id))
+        run_in_worker_loop(scan_file_for_threats_(file_id))
         extract_file_metadata.delay(file_id)
     except FileNotFoundError as e:
         pass
 
 
 @celery_app.task(bind=True, max_retries=3)
-def extract_file_metadata(file_id: str) -> None:
+def extract_file_metadata(self, file_id: str) -> None:
     try:
-        run_in_worker_loop(extract_file_metadata(file_id))
+        run_in_worker_loop(extract_file_metadata_(file_id))
         send_file_alert.delay(file_id)
     except FileNotFoundError as e:
         pass
 
 
 @celery_app.task(bind=True, max_retries=3)
-def send_file_alert(file_id: str) -> None:
-    run_in_worker_loop(send_file_alert(file_id))
+def send_file_alert(self, file_id: str) -> None:
+    run_in_worker_loop(send_file_alert_(file_id))
