@@ -11,3 +11,5 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN uv sync --locked
 
 COPY src ./src
+COPY main.py ./
+COPY .env.dev ./

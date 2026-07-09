@@ -1,68 +1,52 @@
-import asyncio
-import os
 from pathlib import Path
-from celery import Celery
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+from src.config import settings
 from src.models import Alert, StoredFile
-from src.service import STORAGE_DIR, DB_URL
 
-REDIS_URL = os.environ.get("REDIS_URL", "redis://backend-redis:6379/0")
-_worker_loop: asyncio.AbstractEventLoop | None = None
-
-
-def run_in_worker_loop(coroutine):
-    global _worker_loop
-    if _worker_loop is None or _worker_loop.is_closed():
-        _worker_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(_worker_loop)
-    return _worker_loop.run_until_complete(coroutine)
-
-
-celery_app = Celery("file_tasks", broker=REDIS_URL, backend=REDIS_URL)
-engine = create_async_engine(DB_URL)
+engine = create_async_engine(settings.db_url)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
+SUSPICIOUS_EXTENSIONS = {".exe", ".bat", ".cmd", ".sh", ".js"}
+MAX_SAFE_SIZE_BYTES = 10 * 1024 * 1024
+ALLOWED_MIMES = ["application/pdf", "application/octet-stream"]
 
-async def _scan_file_for_threats(file_id: str) -> None:
+
+async def scan_file_for_threats(file_id: str) -> bool | None:
     async with async_session_maker() as session:
-        file_item = await session.get(StoredFile, file_id)
-        if not file_item:
-            return
+        file_item = await _get_file(session, file_id)
 
         file_item.processing_status = "processing"
         reasons: list[str] = []
         extension = Path(file_item.original_name).suffix.lower()
 
-        if extension in {".exe", ".bat", ".cmd", ".sh", ".js"}:
+        if extension in SUSPICIOUS_EXTENSIONS:
             reasons.append(f"suspicious extension {extension}")
 
-        if file_item.size > 10 * 1024 * 1024:
+        if file_item.size > MAX_SAFE_SIZE_BYTES:
             reasons.append("file is larger than 10 MB")
 
-        if extension == ".pdf" and file_item.mime_type not in {"application/pdf", "application/octet-stream"}:
+        if extension == ".pdf" and file_item.mime_type not in ALLOWED_MIMES:
             reasons.append("pdf extension does not match mime type")
 
         file_item.scan_status = "suspicious" if reasons else "clean"
         file_item.scan_details = ", ".join(reasons) if reasons else "no threats found"
         file_item.requires_attention = bool(reasons)
         await session.commit()
+        return True
 
-    extract_file_metadata.delay(file_id)
 
-
-async def _extract_file_metadata(file_id: str) -> None:
+async def extract_file_metadata(file_id: str) -> bool | None:
     async with async_session_maker() as session:
-        file_item = await session.get(StoredFile, file_id)
-        if not file_item:
-            return
+        file_item = await _get_file(session, file_id)
 
-        stored_path = STORAGE_DIR / file_item.stored_name
+        stored_path = settings.STORAGE_DIR / file_item.stored_name
         if not stored_path.exists():
             file_item.processing_status = "failed"
             file_item.scan_status = file_item.scan_status or "failed"
             file_item.scan_details = "stored file not found during metadata extraction"
             await session.commit()
-            send_file_alert.delay(file_id)
             return
 
         metadata = {
@@ -82,15 +66,13 @@ async def _extract_file_metadata(file_id: str) -> None:
         file_item.metadata_json = metadata
         file_item.processing_status = "processed"
         await session.commit()
+        return
 
-    send_file_alert.delay(file_id)
 
 
-async def _send_file_alert(file_id: str) -> None:
+async def send_file_alert(file_id: str) -> None:
     async with async_session_maker() as session:
-        file_item = await session.get(StoredFile, file_id)
-        if not file_item:
-            return
+        file_item = await _get_file(session, file_id)
 
         if file_item.processing_status == "failed":
             alert = Alert(file_id=file_id, level="critical", message="File processing failed")
@@ -107,16 +89,8 @@ async def _send_file_alert(file_id: str) -> None:
         await session.commit()
 
 
-@celery_app.task
-def scan_file_for_threats(file_id: str) -> None:
-    run_in_worker_loop(_scan_file_for_threats(file_id))
-
-
-@celery_app.task
-def extract_file_metadata(file_id: str) -> None:
-    run_in_worker_loop(_extract_file_metadata(file_id))
-
-
-@celery_app.task
-def send_file_alert(file_id: str) -> None:
-    run_in_worker_loop(_send_file_alert(file_id))
+async def _get_file(session: AsyncSession, file_id: str) -> StoredFile:
+    file_item = await session.get(StoredFile, file_id)
+    if not file_item:
+        raise FileNotFoundError(file_id)
+    return file_item

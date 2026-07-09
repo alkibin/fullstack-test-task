@@ -1,13 +1,14 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FileItem(BaseModel):
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    title: str
+    title: str = Field(description="Наименование файла")
     original_name: str
     mime_type: str
     size: int
@@ -21,10 +22,12 @@ class FileItem(BaseModel):
 
 
 class FileUpdate(BaseModel):
-    title: str
+
+    title: str = Field(min_length=1, max_length=255)
 
 
 class AlertItem(BaseModel):
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
