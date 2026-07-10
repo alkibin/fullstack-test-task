@@ -1,22 +1,20 @@
-import asyncio
 import mimetypes
-from pathlib import Path
-from uuid import uuid4
+from typing import AsyncIterator
 
-from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import exceptions
-from src.tasks.handlers import scan_file_for_threats
-from src.config import settings
+from src.interfaces.file_storage import FileStorage
 from src.models import StoredFile
+from src.tasks.handlers import scan_file_for_threats
 
 
 class FileService:
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, storage_adapter: FileStorage):
         self.session = session
+        self.storage = storage_adapter
 
     async def list_files(self) -> list[StoredFile]:
         result = await self.session.execute(
@@ -29,30 +27,34 @@ class FileService:
         if not file_item:
             raise exceptions.NotFoundError(file_id)
 
-        return file_item
-
-    async def create_file(self, title: str, upload_file: UploadFile) -> StoredFile:
-        content = await upload_file.read()
-        if not content:
+        if not self.storage.exists(str(file_item.stored_name)):
             raise exceptions.EmptyFileError()
 
-        file_id = str(uuid4())
-        suffix = Path(upload_file.filename or "").suffix
-        stored_name = f"{file_id}{suffix}"
-        stored_path = settings.STORAGE_DIR / stored_name
+        return file_item
 
-        await asyncio.to_thread(stored_path.write_bytes, content)
+    async def create_file(
+        self,
+        title: str,
+        filename: str,
+        content_type: str | None,
+        stream: AsyncIterator[bytes],
+    ) -> StoredFile:
+        size, file_id, stored_name = await self.storage.save_stream(
+            filename, stream
+        )
+        if size == 0:
+            await self.storage.delete(stored_name)
+            raise exceptions.EmptyFileError()
 
         file_item = StoredFile(
             id=file_id,
             title=title,
-            original_name=upload_file.filename or stored_name,
+            original_name=filename or stored_name,
             stored_name=stored_name,
-            mime_type=upload_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
-            size=len(content),
+            mime_type=content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
+            size=size,
             processing_status="uploaded",
         )
-
         self.session.add(file_item)
         await self.session.commit()
         await self.session.refresh(file_item)
@@ -61,9 +63,8 @@ class FileService:
 
         return file_item
 
-    async def update_file(self, file_id: str, title: str) -> StoredFile:
+    async def rename_file(self, file_id: str, title: str) -> StoredFile:
         file_item = await self.get_file(file_id)
-
         file_item.title = title
         await self.session.commit()
         await self.session.refresh(file_item)
@@ -71,18 +72,11 @@ class FileService:
 
     async def delete_file(self, file_id: str) -> None:
         file_item = await self.get_file(file_id)
-
-        stored_path = settings.STORAGE_DIR / file_item.stored_name
-        await asyncio.to_thread(stored_path.unlink, missing_ok=True)
-
+        await self.storage.delete(file_item.stored_name)
         await self.session.delete(file_item)
         await self.session.commit()
 
-    async def get_file_path(self, file_id: str) -> tuple[StoredFile, Path]:
+    async def download_file(self, file_id: str):
         file_item = await self.get_file(file_id)
-        stored_path = settings.STORAGE_DIR / file_item.stored_name
-        exists = await asyncio.to_thread(stored_path.exists)
-        if not exists:
-            raise exceptions.StoredFileMissingError(file_id)
-
-        return file_item, stored_path
+        file_stream_iter = self.storage.get_stream(file_item.stored_name)
+        return file_item, file_stream_iter

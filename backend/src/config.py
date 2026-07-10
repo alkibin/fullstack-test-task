@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     def db_url(self):
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
+    UPLOAD_CHUNK_SIZE: int = 1024 * 1024
 
 
 settings = Settings()
