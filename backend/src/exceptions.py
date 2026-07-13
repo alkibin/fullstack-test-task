@@ -27,3 +27,10 @@ class EmptyFileError(BaseError):
 
     def __init__(self):
         super().__init__("Uploaded file is empty")
+
+
+class FileAllreadyExists(BaseError):
+    """Эксепшн о том что загружаемый файл уже существует."""
+
+    def __init__(self):
+        super().__init__("Uploaded file is allready exists")

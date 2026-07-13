@@ -16,7 +16,6 @@ ALLOWED_MIMES = ["application/pdf", "application/octet-stream"]
 async def scan_file_for_threats_(file_id: str) -> bool | None:
     async with async_session_maker() as session:
         file_item = await _get_file(session, file_id)
-
         file_item.processing_status = "processing"
         reasons: list[str] = []
         extension = Path(file_item.original_name).suffix.lower()

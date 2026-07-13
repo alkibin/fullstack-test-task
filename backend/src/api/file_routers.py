@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import File, Form, UploadFile
@@ -12,9 +14,7 @@ router = APIRouter(tags=["File"], prefix="/files")
 
 
 @router.get("", response_model=list[FileItem])
-async def list_files_view(
-    service: FileService = Depends(get_file_service),
-):
+async def list_files_view(service: FileService = Depends(get_file_service)):
     return await service.list_files()
 
 
@@ -30,7 +30,7 @@ async def create_file_view(
         content_type=file.content_type,
         stream=iter_upload_file(file),
     )
-    return file_item
+    return FileItem.model_validate(file_item)
 
 
 @router.get("/{file_id}", response_model=FileItem)
@@ -38,7 +38,8 @@ async def get_file_view(
         file_id: str,
         service: FileService = Depends(get_file_service),
 ):
-    return await service.get_file(file_id)
+    file_item = await service.get_file(file_id)
+    return FileItem.from_model(file_item)
 
 
 @router.patch("/{file_id}", response_model=FileItem)
@@ -47,26 +48,28 @@ async def update_file_view(
     payload: FileUpdate,
     service: FileService = Depends(get_file_service),
 ):
-    return await service.rename_file(file_id=file_id, title=payload.title)
+    file_item = await service.rename_file(file_id=file_id, title=payload.title)
+    FileItem.from_model(file_item)
 
 
 @router.get("/{file_id}/download")
 async def download_file(
-        file_id: str,
+        file_id: int,
         service: FileService = Depends(get_file_service),
 ):
     file_item, stream = await service.download_file(file_id=file_id)
+    encoded_filename = quote(file_item.original_name)
     return StreamingResponse(
         content=stream,
         media_type=file_item.mime_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{file_item.original_name}"'}
+            "Content-Disposition": f'attachment; filename="{encoded_filename}"'}
     )
 
 
 @router.delete("/{file_id}", status_code=204)
 async def delete_file_view(
-        file_id: str,
-        service: FileService = Depends(get_file_service),
+    file_id: int,
+    service: FileService = Depends(get_file_service),
 ):
-    await service.delete_file(file_id)
+    await service.delete_file(file_link_id=file_id)
