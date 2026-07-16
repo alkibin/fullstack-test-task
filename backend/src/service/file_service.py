@@ -27,7 +27,7 @@ class FileService:
         if not file_item:
             raise exceptions.NotFoundError(file_id)
 
-        if not self.storage.exists(str(file_item.stored_name)):
+        if not await self.storage.exists(str(file_item.stored_name)):
             raise exceptions.EmptyFileError()
 
         return file_item
