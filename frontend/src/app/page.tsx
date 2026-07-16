@@ -95,6 +95,7 @@ export default function Page() {
   const [title, setTitle] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function loadData() {
     setIsLoading(true);
@@ -161,6 +162,31 @@ export default function Page() {
       setErrorMessage(error instanceof Error ? error.message : "Произошла ошибка");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleDelete(fileId: string) {
+    if (!window.confirm("Удалить файл? Это действие нельзя отменить.")) {
+      return;
+    }
+
+    setDeletingId(fileId);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(`http://localhost:8000/files/${fileId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Не удалось удалить файл");
+      }
+
+      await loadData();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Произошла ошибка");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -261,8 +287,17 @@ export default function Page() {
                                 href={`http://localhost:8000/files/${file.id}/download`}
                                 variant="outline-primary"
                                 size="sm"
+                                className="me-2"
                               >
                                 Скачать
+                              </Button>
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                disabled={deletingId === file.id}
+                                onClick={() => void handleDelete(file.id)}
+                              >
+                                {deletingId === file.id ? "Удаление..." : "Удалить"}
                               </Button>
                             </td>
                           </tr>

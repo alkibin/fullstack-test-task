@@ -7,7 +7,8 @@ class FileItem(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: int
+    file_id: str
     title: str = Field(description="Наименование файла")
     original_name: str
     mime_type: str
@@ -18,7 +19,6 @@ class FileItem(BaseModel):
     metadata_json: dict | None
     requires_attention: bool
     created_at: datetime
-    updated_at: datetime
 
 
 class FileUpdate(BaseModel):
