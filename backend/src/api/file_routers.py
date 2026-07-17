@@ -35,21 +35,21 @@ async def create_file_view(
 
 @router.get("/{file_id}", response_model=FileItem)
 async def get_file_view(
-        file_id: str,
+        file_id: int,
         service: FileService = Depends(get_file_service),
 ):
     file_item = await service.get_file(file_id)
-    return FileItem.from_model(file_item)
+    return FileItem.model_validate(file_item)
 
 
 @router.patch("/{file_id}", response_model=FileItem)
 async def update_file_view(
-    file_id: str,
+    file_id: int,
     payload: FileUpdate,
     service: FileService = Depends(get_file_service),
 ):
-    file_item = await service.rename_file(file_id=file_id, title=payload.title)
-    FileItem.from_model(file_item)
+    file_item = await service.rename_file(file_name_id=file_id, title=payload.title)
+    return FileItem.model_validate(file_item)
 
 
 @router.get("/{file_id}/download")

@@ -3,9 +3,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
+print(Path(__file__).resolve().parent.parent / ".env.dev")
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env.dev', extra="allow")
 
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     STORAGE_DIR: Path = BASE_DIR / "storage" / "files"
@@ -23,6 +22,8 @@ class Settings(BaseSettings):
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     UPLOAD_CHUNK_SIZE: int = 1024 * 1024
+
+    model_config = SettingsConfigDict(env_file=BASE_DIR / ".env.dev", extra="allow")
 
 
 settings = Settings()

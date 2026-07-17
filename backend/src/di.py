@@ -9,6 +9,9 @@ from src.repositories.file_repo import FileRepo
 from src.repositories.alert_repo import AlertRepo
 
 
+def get_file_adapter():
+    return PathLibFileAdapter()
+
 def get_file_repository(
     session: AsyncSession = Depends(get_session),
 ):
@@ -29,7 +32,7 @@ def get_alert_service(
 
 def get_file_service(
         repo=Depends(get_file_repository),
-        storage=PathLibFileAdapter(),
+        storage=Depends(get_file_adapter),
 ):
     return FileService(
         storage_adapter=storage,

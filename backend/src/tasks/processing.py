@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from pypdf import PdfReader
 
 from src.config import settings
 from src.models import Alert, StoredFile
@@ -66,8 +67,8 @@ async def extract_file_metadata_(file_id: str) -> bool | None:
             metadata["char_count"] = char_count
         elif file_item.mime_type == "application/pdf":
             with open(stored_path, 'rb') as f:
-                header = f.read(1024 * 1024)
-            metadata["approx_page_count"] = max(header.count(b"/Type /Page"), 1)
+                reader = PdfReader(f)
+            metadata["approx_page_count"] = len(reader.pages)
 
         file_item.metadata_json = metadata
         file_item.processing_status = "processed"

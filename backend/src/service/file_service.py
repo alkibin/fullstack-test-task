@@ -73,9 +73,12 @@ class FileService:
     async def find_by_name(self, name: str, files):
         return next((file for file in files if file.title == name), None)
 
-    async def rename_file(self, file_id: str, title: str) -> FileWithMetaDTO:
-        await self.repo.update_link(file_id, title=title)
-        return await self.repo.get_full_file_data(file_id)
+    async def rename_file(self, file_name_id: int, title: str) -> FileWithMetaDTO:
+        file_item = await self.repo.get_full_file_data(file_name_id)
+        if not file_item:
+            raise exceptions.NotFoundError(file_name_id)
+        await self.repo.update_link(file_name_id, title=title)
+        return await self.repo.get_full_file_data(file_name_id)
 
     async def delete_file(self, file_link_id: int) -> None:
         file_item = await self.repo.get_full_file_data(file_name_id=file_link_id)
@@ -91,5 +94,5 @@ class FileService:
 
     async def download_file(self, file_id: int):
         file_item = await self.get_file(file_id)
-        file_stream_iter = self.storage.get_stream(file_item.stored_name)
+        file_stream_iter = await self.storage.get_stream(file_item.stored_name)
         return file_item, file_stream_iter
